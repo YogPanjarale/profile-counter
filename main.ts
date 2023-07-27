@@ -90,7 +90,6 @@ app.use(router.allowedMethods());
 app.use(async (context: Context) => {
   await send(context, context.request.url.pathname, {
     root: `${Deno.cwd()}/public`,
-    index: "index.html",
   });
 });
 
