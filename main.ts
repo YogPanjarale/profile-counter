@@ -1,14 +1,19 @@
 import { Application, Router, Context, send } from "https://deno.land/x/oak/mod.ts";
-import { config } from "https://deno.land/x/dotenv/mod.ts";
-import { create } from "https://deno.land/x/redis/mod.ts";
+import { Redis } from "https://deno.land/x/upstash_redis/mod.ts";
 
 const app = new Application();
 const router = new Router();
 
-const { REDIS_URL, DISCORD_WEBHOOK_URL, PORT = "3000" } = config();
+const UPSTASH_REDIS_REST_URL = Deno.env.get("UPSTASH_REDIS_REST_URL");
+const UPSTASH_REDIS_REST_TOKEN = Deno.env.get("UPSTASH_REDIS_REST_TOKEN");
+const DISCORD_WEBHOOK_URL = Deno.env.get("DISCORD_WEBHOOK_URL");
+const PORT = Deno.env.get("PORT") || "3000";
 
-const redis = await create(REDIS_URL);
-
+console.log(UPSTASH_REDIS_REST_URL)
+const redis = new Redis({
+  url: UPSTASH_REDIS_REST_URL,
+  token: UPSTASH_REDIS_REST_TOKEN,
+})
 const PLACES = 7;
 
 export function makeSvg(count: number) {
@@ -76,7 +81,13 @@ router.get("/:key/", async (context: Context) => {
       count = "0";
     }
 
-    context.response.body = `Hit count for ${key}: ${count}`;
+    const response = {
+      key,
+      count,
+    };
+
+    context.response.headers.set("Content-Type", "application/json");
+    context.response.body = JSON.stringify(response);
   } catch (error) {
     console.error("Error occurred:", error);
     context.response.status = 500;
@@ -84,14 +95,15 @@ router.get("/:key/", async (context: Context) => {
   }
 });
 
+
 app.use(router.routes());
 app.use(router.allowedMethods());
 
-app.use(async (context: Context) => {
-  await send(context, context.request.url.pathname, {
-    root: `${Deno.cwd()}/public`,
-  });
-});
+// app.use(async (context: Context) => {
+//   await send(context, context.request.url.pathname, {
+//     root: `${Deno.cwd()}/public`,
+//   });
+// });
 
 console.log(`Server is running on port ${PORT}`);
 await app.listen({ port: parseInt(PORT) });
