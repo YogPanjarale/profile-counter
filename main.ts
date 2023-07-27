@@ -29,7 +29,7 @@ interface Counter {
 
 const PLACES = 7;
 
-export function makeSVG(count: number) {
+export function makeSvg(count: number) {
   const countArray = count.toString().padStart(PLACES, "0").split("");
   const parts = countArray.reduce(
     (acc, next, index) => `
@@ -54,52 +54,38 @@ export function makeSVG(count: number) {
 };
 
 router.get("/:key/count", async (context: Context) => {
-  try {
+try {
     const { key } = context.params;
-    const counter: Counter | null = await collection.findOne({ key });
+    let counter: Counter | null = await collection.findOne({ key });
 
-    if (counter) {
+    if (!counter) {
+      // If the counter does not exist, create a new one
+      const newCount = 1;
+      counter = { key, count: newCount };
+      await collection.insertOne(counter);
+    } else {
       // Increment the counter
       const updatedCount = counter.count + 1;
       await collection.updateOne(
         { _id: counter._id },
         { $set: { count: updatedCount } }
       );
-
-      // Send message to Discord via webhook
-      await fetch(DISCORD_WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          content: `Hit count for ${key}: ${updatedCount}`,
-        }),
-      });
-
-      // Create SVG
-      const svg = makeSVG(updatedCount);
-
-      context.response.headers.set("Content-Type", "image/svg+xml");
-      context.response.body = svg;
-    } else {
-      // If the counter does not exist, create a new one
-      const newCount = 1;
-      await collection.insertOne({ key, count: newCount });
-
-      // Send message to Discord via webhook
-      await fetch(DISCORD_WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          content: `Hit count for ${key}: ${newCount}`,
-        }),
-      });
-
-      // Create SVG
-      const svg = makeSvg(newCount);
-
-      context.response.headers.set("Content-Type", "image/svg+xml");
-      context.response.body = svg;
     }
+
+    // Send message to Discord via webhook
+    await fetch(DISCORD_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        content: `Hit count for ${key}: ${counter.count}`,
+      }),
+    });
+
+    // Create SVG
+    const svg = makeSvg(counter.count);
+
+    context.response.headers.set("Content-Type", "image/svg+xml");
+    context.response.body = svg;
   } catch (error) {
     console.error("Error occurred:", error);
     context.response.status = 500;
