@@ -1,75 +1,49 @@
-import { Application, Router, Context } from "https://deno.land/x/oak/mod.ts";
-import { MongoClient } from "https://deno.land/x/mongo/mod.ts";
+import { Application, Router, Context, send } from "https://deno.land/x/oak/mod.ts";
 import { config } from "https://deno.land/x/dotenv/mod.ts";
+import { create } from "https://deno.land/x/redis/mod.ts";
 
 const app = new Application();
 const router = new Router();
 
-const {
-  MONGODB_URI,
-  MONGODB_DB,
-  DISCORD_WEBHOOK_URL,
-  PORT = "3000",
-} = config();
+const { REDIS_URL, DISCORD_WEBHOOK_URL, PORT = "3000" } = config();
 
-const client = new MongoClient();
-await client.connect({
-  db: MONGODB_DB,
-  uri: MONGODB_URI,
-});
-
-const db = client.database(MONGODB_DB);
-const collection = db.collection("counters");
-
-interface Counter {
-  _id: { $oid: string };
-  key: string;
-  count: number;
-}
+const redis = await create(REDIS_URL);
 
 const PLACES = 7;
 
 export function makeSvg(count: number) {
   const countArray = count.toString().padStart(PLACES, "0").split("");
   const parts = countArray.reduce(
-    (acc, next, index) => `
-        ${acc}
-        <rect id="Rectangle" fill="#000000" x="${index *
-      32}" width="29" height="29"></rect>
-        <text id="0" font-family="Courier" font-size="24" font-weight="normal" fill="#00FF13">
-            <tspan x="${index * 32 + 7}" y="22">${next}</tspan>
-        </text>
+    (acc, next, index) =>
+      `${acc}
+       <rect id="Rectangle" fill="#000000" x="${index * 32}" width="29" height="29"></rect>
+       <text id="0" font-family="Courier" font-size="24" font-weight="normal" fill="#00FF13">
+           <tspan x="${index * 32 + 7}" y="22">${next}</tspan>
+       </text>
 `,
     ""
   );
   return `<?xml version="1.0" encoding="UTF-8"?>
-  <svg width="${PLACES *
-    32}px" height="30px" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <svg width="${PLACES * 32}px" height="30px" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
       <title>Count</title>
       <g id="Page-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
         ${parts}
       </g>
   </svg>
   `;
-};
+}
 
-router.get("/:key/count", async (context: Context) => {
-try {
+router.get("/:key/count.svg", async (context: Context) => {
+  try {
     const { key } = context.params;
-    let counter: Counter | null = await collection.findOne({ key });
+    let count = await redis.get(key);
 
-    if (!counter) {
-      // If the counter does not exist, create a new one
-      const newCount = 1;
-      counter = { key, count: newCount };
-      await collection.insertOne(counter);
+    if (!count) {
+      count = "1";
+      await redis.set(key, count);
     } else {
-      // Increment the counter
-      const updatedCount = counter.count + 1;
-      await collection.updateOne(
-        { _id: counter._id },
-        { $set: { count: updatedCount } }
-      );
+      count = String(parseInt(count) + 1);
+      await redis.set(key, count);
     }
 
     // Send message to Discord via webhook
@@ -77,12 +51,12 @@ try {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        content: `Hit count for ${key}: ${counter.count}`,
+        content: `Hit count for ${key}: ${count}`,
       }),
     });
 
     // Create SVG
-    const svg = makeSvg(counter.count);
+    const svg = makeSvg(parseInt(count));
 
     context.response.headers.set("Content-Type", "image/svg+xml");
     context.response.body = svg;
@@ -93,8 +67,32 @@ try {
   }
 });
 
+router.get("/:key/", async (context: Context) => {
+  try {
+    const { key } = context.params;
+    let count = await redis.get(key);
+
+    if (!count) {
+      count = "0";
+    }
+
+    context.response.body = `Hit count for ${key}: ${count}`;
+  } catch (error) {
+    console.error("Error occurred:", error);
+    context.response.status = 500;
+    context.response.body = "Internal Server Error";
+  }
+});
+
 app.use(router.routes());
 app.use(router.allowedMethods());
+
+app.use(async (context: Context) => {
+  await send(context, context.request.url.pathname, {
+    root: `${Deno.cwd()}/public`,
+    index: "index.html",
+  });
+});
 
 console.log(`Server is running on port ${PORT}`);
 await app.listen({ port: parseInt(PORT) });
