@@ -64,7 +64,7 @@ router.get("/:key/count.svg", async (context: Context) => {
     const svg = makeSvg(parseInt(count));
 
     context.response.headers.set("Content-Type", "image/svg+xml");
-    context.response.headers.set("Cache-Control":"max-age=0, no-cache, no-store, must-revalidate")
+    context.response.headers.set("Cache-Control","max-age=0, no-cache, no-store, must-revalidate")
 
     context.response.body = svg;
   } catch (error) {
