@@ -65,7 +65,7 @@ router.get("/:key/count.svg", async (context: Context) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        content: `Hit count for ${key}: ${count} at <t:${ new Date().getTime()/1000}:f>`,
+        content: `Hit count for ${key}: ${count} at <t:${Math.round(new Date().getTime()/1000)}:f>`,
       }),
     });
     }
