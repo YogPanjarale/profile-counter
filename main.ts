@@ -7,6 +7,9 @@ const router = new Router();
 const UPSTASH_REDIS_REST_URL = Deno.env.get("UPSTASH_REDIS_REST_URL");
 const UPSTASH_REDIS_REST_TOKEN = Deno.env.get("UPSTASH_REDIS_REST_TOKEN");
 const DISCORD_WEBHOOK_URL = Deno.env.get("DISCORD_WEBHOOK_URL");
+const NOTIFY_KEYS = Deno.env.get("NOTIFY_KEYS");
+
+
 const PORT = Deno.env.get("PORT") || "3000";
 
 console.log(UPSTASH_REDIS_REST_URL)
@@ -15,6 +18,11 @@ const redis = new Redis({
   token: UPSTASH_REDIS_REST_TOKEN,
 })
 const PLACES = 7;
+
+function checkKeyInProfileKeys(profileKeys, givenKey) {
+  const isKeyIncluded = profileKeys.split(',').map(key => key.trim()).includes(givenKey);
+  return isKeyIncluded;
+}
 
 export function makeSvg(count: number) {
   const countArray = count.toString().padStart(PLACES, "0").split("");
@@ -51,15 +59,16 @@ router.get("/:key/count.svg", async (context: Context) => {
       await redis.set(key, count);
     }
 
-    // Send message to Discord via webhook
+    // Send message to Discord via webhook only if key is included in NOTIFY_KEYS
+    if (checkKeyInProfileKeys(NOTIFY_KEYS,key)){
     await fetch(DISCORD_WEBHOOK_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        content: `Hit count for ${key}: ${count}`,
+        content: `Hit count for ${key}: ${count} at <t:${ new Date().getTime()/1000}:f>`,
       }),
     });
-
+    }
     // Create SVG
     const svg = makeSvg(parseInt(count));
 
