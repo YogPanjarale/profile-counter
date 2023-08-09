@@ -17,4 +17,4 @@ Heavily inspired by `https://profile-counter.glitch.me/:yourkey:/count.svg`
 
 I could not find the creator of it , you may create a PR to update 
 
-Further disclamer it used a discord web-hook to notify me of the view ; I plan to set env variable to just whitelist my personal keys so that i only revice notifications for my projects 
+Further disclamer it used a discord web-hook to notify me when my whitelisted keys get a request  ; I  have set env variable to just whitelist my personal keys so that i only revice notifications for my projects 
